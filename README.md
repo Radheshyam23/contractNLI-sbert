@@ -1,18 +1,13 @@
 # contractNLI-sbert
 Contract NLI using sentence transformers instead of using spans and sliding context.
 
-The Plan:
-- First break down the doc into paragraphs
-- Now use sbert to encode each paragraph
-- compare the encodings for similarity
-- decide a threshold similarity
-- club similar paras into one segment.
+1. Relevance Classification:
+Given a hypothesis and each span in the document, classify if that span is relevant to that hypothesis or not.
 
-Model training:
-- Model such as AlBERT, RoBERTA, etc.
-- Figure out how to aggregate
+2. Hypothesis Classification:
+Given a hypothesis and the relevant spans, classify the hypothesis as contradiction, entailment or not mentioned.
 
-
-
-Observations:
-- Spans doesn't exactly correlate with new line. There are some spans which are abruptyly in the middle of a sentence.
+3. Segmentation:
+Re-defining spans to be more meaningful and encapsulate a larger context based on meaning. We calculate the similarity between
+consecutive spans and if they are similar enough, club it into a bigger span (which we are calling as a segment.)
+This is an add on. Can be enabled by uncommenting the relevant lines of code.

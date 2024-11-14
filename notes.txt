@@ -28,3 +28,6 @@ Bert has context of 512, so ig we have to not segment or use a diff model.
 
 
 but it looks wrong. The stats on top look more acceptable
+
+Observations:
+- Spans doesn't exactly correlate with new line. There are some spans which are abruptyly in the middle of a sentence.
