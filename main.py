@@ -5,86 +5,18 @@ import torch
 from sklearn.metrics.pairwise import cosine_similarity
 import torch.nn as nn
 from torch.utils.data import DataLoader
+from datasett import DataSetGen, loadDocs
+from segmentation import getDocEmbeddings, segmentParas, adjustBySegment
+from hardcode import targetChoices, hypoLabels
 
 from sentence_transformers import SentenceTransformer
 
 
 ################
-targetChoices = {
-    "Contradiction": 0,
-    "Entailment": 1,
-    "NotMentioned": 2 
-}
+
 BatchSize = 16
 
 ################
-
-
-def loadDocs(filePath, hypoLabels):
-    with open(filePath, 'r') as f:
-        data = json.load(f)
-
-    print("Number of documents in the dataset:"+str(len(data["documents"])))
-
-    allDocs = []
-    allTargetChoice = []
-    allTargetSpans = []
-
-    hypothesis = []
-
-    for hypLabel in hypoLabels:
-        hypothesis.append(data["labels"][hypLabel]["hypothesis"])
-
-    for doc in data["documents"]:
-        # Since not all spans are aligned with '\n', we are splitting by span instead of \n
-        # allDocs.append(doc["text"].split("\n"))
-
-        currDoc = []
-        spans=doc["spans"]
-        
-        for span in spans:
-            currDoc.append(doc["text"][span[0]:span[1]])
-
-        allDocs.append(currDoc)
-
-        # This will have 17 different hypothesis and their labels and spans. 
-        # anno = doc["annotation_sets"][0]["annotations"]
-
-        currChoices = []
-        currSpans = []
-        for hypLabel in hypoLabels:
-            currChoices.append(targetChoices[doc["annotation_sets"][0]["annotations"][hypLabel]["choice"]])
-            currSpans.append(doc["annotation_sets"][0]["annotations"][hypLabel]["spans"])
-
-        allTargetChoice.append(currChoices)
-        allTargetSpans.append(currSpans)
-
-    return allDocs, allTargetChoice, allTargetSpans, hypothesis
-
-# Gets the embeddings for all sentences in the document
-def getDocEmbeddings(doc):
-    embeddings = sBertModel.encode(doc, convert_to_tensor=True)
-    return embeddings
-
-# Segmentation
-# Compare the similarity between the embeddings of the sentences in the document
-def segmentParas(embeddings, doc, threshold = 0.6):
-    segments = []
-    segments.append(0)
-
-    numSent = embeddings.shape[0]
-
-    for i in range(1, numSent):
-        # Calculate the cosine similarity between the current sentence and the previous sentence
-        similarity = cosine_similarity([embeddings[i-1]], [embeddings[i]])[0][0]
-        if (similarity < threshold):
-            segments.append(i)
-        print(similarity)
-
-    print("Segments:")
-    print(segments)
-
-    return segments
 
 
 class ClassificationModel(nn.Module):
@@ -173,62 +105,26 @@ def train(allDocs, allTargetChoice, allTargetSpans, hypothesis, segIndices, main
         print("Epoch: "+str(epoch)+" Loss: "+str(totalLoss))
 
 
-def adjustBySegment(allDocs, segIndices, allTargetSpans):
-    newAllDocs = []
-    newAllTargetSegs = []
-
-    for seg in range(len(segIndices)):
-        newCurrDoc = []
-        newCurrTargetSegs = []
-
-        spanToSeg = []
-
-        for i in range(len(segIndices[seg])-1):
-            if (segIndices[seg][i+1] - segIndices[seg][i] == 1):
-                newCurrDoc.append(allDocs[seg][i])
-                spanToSeg.append(i)
-            else:
-                newCurrDoc.append(" ".join(allDocs[seg][segIndices[seg][i]:segIndices[seg][i+1]]))
-                spanToSeg.extend([i] * (segIndices[seg][i+1] - segIndices[seg][i]))
-        
-        newCurrDoc.append(" ".join(allDocs[seg][segIndices[seg][len(segIndices[seg])-1]:]))
-        spanToSeg.extend([i] * (len(allDocs[seg][segIndices[seg][len(segIndices[seg])-1]:])))
-
-        newAllDocs.append(newCurrDoc)
-
-        for i in range(len(allTargetSpans[seg])):
-            tempTargets = []
-            if allTargetSpans[seg][i] == []:
-                newCurrTargetSegs.append([])
-            else:
-                prev = -1
-                for span in allTargetSpans[seg][i]:
-                    if spanToSeg[span] != prev:
-                        tempTargets.append(spanToSeg[span])
-                        prev = spanToSeg[span]
-                newCurrTargetSegs.append(tempTargets)
-
-        newAllTargetSegs.append(newCurrTargetSegs)
-
-    return newAllDocs, newAllTargetSegs
-
-
-
 if __name__ == '__main__':
     filePath = "./data/dev.json"
-    hypoLabels = ["nda-11", "nda-16", "nda-15", "nda-10", "nda-2", "nda-1", "nda-19", "nda-12", "nda-20", "nda-3", "nda-18", "nda-7", "nda-17", "nda-8", "nda-13", "nda-5", "nda-4"]
 
     allDocs, allTargetChoice, allTargetSpans, hypothesis = loadDocs(filePath, hypoLabels)
 
+    # If You do NOT want to perform segmentation, comment the following lines
+    #########################
+    # segmenter = segmentation(all)    
     sBertModel = SentenceTransformer('all-MiniLM-L6-v2')
-
+    segmentThreshold = 0.6
     segIndices = []
     # Getting index of segments
     for doc in allDocs:
         embeddings = getDocEmbeddings(doc)
-        segIndices.append(segmentParas(embeddings, doc))
+        segIndices.append(segmentParas(embeddings, segmentThreshold))
 
     # Now spans are no more the original spans. They are the new segments. Both in the document and in the target
     allDocs, allTargetSpans = adjustBySegment(allDocs, segIndices, allTargetSpans)
+    #########################
 
-    train(allDocs, allTargetChoice, allTargetSpans, hypothesis, segIndices, sBertModel)
+    
+
+    # train(allDocs, allTargetChoice, allTargetSpans, hypothesis, segIndices, sBertModel)
