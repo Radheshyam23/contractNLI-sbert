@@ -74,3 +74,63 @@ def createDataSet(allDocs, allTargetChoice, allTargetSpans, hypothesis):
                 allInp.append(input)
                 allOut.append(output)
     return allInp, allOut
+
+def relevanceLabelling(allDocs, allTargetChoice, allTargetSpans, hypothesis):
+    allInp = []
+    allOut = []
+
+    # Not Relevant = 0
+    # Relevant = 1
+
+    # Creating inputs and outputs:
+    for docID, doc in enumerate(allDocs):
+        for hypID, hypo in enumerate(hypothesis):
+            for segID, segment in enumerate(doc):
+                input = hypo + " " + segment
+
+                if segID in allTargetSpans[docID][hypID]:
+                    output = 1
+                else:
+                    output = 0
+                    
+                allInp.append(input)
+                allOut.append(output)
+    return allInp, allOut
+
+
+# Create dataset for hypothesis classification
+def prepHypoClassiData(allDocs, allTargetChoice, allTargetSpans, hypothesis):
+    """
+    This is for train. Hence we will use the data directly from the dataset.
+    
+    The input data will be of form:
+    ["hypo1 rel1 rel2 rel3 ...", "hypo2 rel1 rel2 rel3 ...", ...]
+    so len(inp) will be numDocs * numHypothesis
+
+    The target will be of form:
+    [0, 1, 2, 0, 1, 2, ...]
+    Just saying if each hypo is contra entail or not mentioned
+    """
+
+    allInp = []
+    allOut = []
+
+    # Not Relevant = 0
+    # Relevant = 1
+
+    # Creating inputs and outputs:
+    for docID, doc in enumerate(allDocs):
+        for hypID, hypo in enumerate(hypothesis):
+            inp = hypo
+            for segID in allTargetSpans[docID][hypID]:
+                inp += " " + doc[segID]
+            allInp.append(inp)
+            allOut.append(allTargetChoice[docID][hypID])
+    return allInp, allOut
+
+def testHypoClassiData():
+    """
+        For inference. After Task 1 we will get a list of all relevant segments IDs.
+        We will have to find only those segment IDs and then create the input.
+    """
+    pass

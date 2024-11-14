@@ -1,0 +1,30 @@
+$$$$$$$$$$$$$
+
+Relev Data:
+Max Length:  214
+Mean Length:  34.631447875112414
+90th Percentile:  66
+
+
+Classi Data:
+Max Length:  405
+Mean Length:  59.200578592092576
+90th Percentile:  137
+
+$$$$$$$$$
+
+This is the initial stats I got:
+With segmentation, context size of input increases. Stats:
+Max Length: 3458
+Mean Length: 320.47396690635014
+90th Percentile: 618
+
+Without segmenting (i.e. with original spans). Stats:
+Max Length: 1674
+Mean Length: 242.23076302257476
+90th Percentile: 442
+
+Bert has context of 512, so ig we have to not segment or use a diff model.
+
+
+but it looks wrong. The stats on top look more acceptable
