@@ -1,7 +1,9 @@
 from torch.utils.data import Dataset
 import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments, EarlyStoppingCallback
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+import json
+from tqdm import tqdm
 
 ##############
 max_length = 145
@@ -57,6 +59,7 @@ training_args = TrainingArguments(
     output_dir="./hypothesis_results",
     evaluation_strategy="epoch",
     save_strategy="epoch",
+    save_total_limit=1,
     learning_rate=2e-5,
     per_device_train_batch_size=16,
     num_train_epochs=10,
@@ -67,13 +70,24 @@ training_args = TrainingArguments(
     greater_is_better=False,
 )
 
+# Early stopping callback
+early_stopping_callback = EarlyStoppingCallback(
+    early_stopping_patience=3  # Stop training if no improvement for 3 evaluation steps
+)
+
 # Metrics for evaluation
 def compute_metrics(pred):
     labels = pred.label_ids
     preds = pred.predictions.argmax(-1)
     acc = accuracy_score(labels, preds)
     precision, recall, f1, _ = precision_recall_fscore_support(labels, preds, average="weighted")
-    return {"accuracy": acc, "f1": f1, "precision": precision, "recall": recall}
+    metrics =  {"accuracy": acc, "f1": f1, "precision": precision, "recall": recall}
+
+    # Save metrics to a text file
+    with open("hypoClassi_metrics_log.txt", "a") as f:
+        f.write(json.dumps(metrics) + "\n")
+
+    return metrics
 
 # Function to train the model
 def train_hypothesis_classification(train_inputs, train_labels, dev_inputs, dev_labels):
@@ -89,6 +103,7 @@ def train_hypothesis_classification(train_inputs, train_labels, dev_inputs, dev_
         train_dataset=train_dataset,
         eval_dataset=dev_dataset,
         compute_metrics=compute_metrics,
+        callbacks=[early_stopping_callback],
     )
 
     # Train and save the model
@@ -128,3 +143,45 @@ def classify_hypothesis(input_text, tokenizer, model):
         pred_label = outputs.logits.argmax(dim=-1).item()
 
     return pred_label
+
+def testHypoClassification(testInp, modelPath):
+    """
+    Classifies a list of hypothesis with relevant sentences into one of 3 classes.
+    This is for inference
+    """
+
+    tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+    hypoClassiModel = AutoModelForSequenceClassification.from_pretrained(modelPath)
+
+    # Ensure the model is in evaluation mode
+    hypoClassiModel.eval()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    hypoClassiModel.to(device)
+
+    predictedLabels = []
+
+    batchSize = 100
+    for i in tqdm(range(0, len(testInp), batchSize)):
+        batchInputs = testInp[i:i + batchSize]
+
+        # Tokenize the inputs
+        encoded_inputs = tokenizer(
+            batchInputs,
+            truncation=True,
+            padding="max_length",
+            max_length=max_length,
+            return_tensors="pt",
+        )
+
+        input_ids = encoded_inputs["input_ids"].to(device)
+        attention_mask = encoded_inputs["attention_mask"].to(device)
+
+        # Perform inference
+        with torch.no_grad():
+            outputs = hypoClassiModel(input_ids=input_ids, attention_mask=attention_mask)
+            logits = outputs.logits
+
+        # Get predicted labels (0, 1, 2)
+        predictedLabels.extend(torch.argmax(logits, dim=-1).cpu().tolist())
+
+    return predictedLabels

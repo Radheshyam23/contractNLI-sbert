@@ -128,9 +128,26 @@ def prepHypoClassiData(allDocs, allTargetChoice, allTargetSpans, hypothesis):
             allOut.append(allTargetChoice[docID][hypID])
     return allInp, allOut
 
-def testHypoClassiData():
+def testHypoClassiData(allDocs, relevanceLabels, hypothesis):
     """
         For inference. After Task 1 we will get a list of all relevant segments IDs.
         We will have to find only those segment IDs and then create the input.
     """
-    pass
+
+    allInp = []
+    notMentionIndices = []
+
+    runningCounter = 0
+    for docID, doc in enumerate(allDocs):
+        for hypID, hypo in enumerate(hypothesis):
+            inp = hypo
+            noRel = True
+            for segID, segment in enumerate(doc):
+                if relevanceLabels[runningCounter] == 1:
+                    inp += " " + segment
+                    noRel = False
+                runningCounter += 1
+            allInp.append(inp)
+            if noRel:
+                notMentionIndices.append(len(allInp)-1)
+    return allInp, notMentionIndices
