@@ -26,3 +26,26 @@ Given a document and the hypothesis, first perform relevance classification to i
 
 Segmentation:
 Re-defining spans to be more meaningful and encapsulate a larger context based on meaning. We calculate the similarity between consecutive spans by using sentence-transformer and if they are similar enough, club it into a bigger span (which we are calling as a segment.)
+
+### Instructions to run:
+
+Just run `python main.py` after installing the required libraries and dependencies.
+
+In main.py adjust the config as required:
+```
+    config = {
+        "trainMode": False,
+        "segmentation": False,
+        "task1": False,
+        "task2": False,
+        "humanMode": False,
+        "try": False
+    }
+```
+`trainMode` set to True to train the model. Set to False for using a saved model for inference and testing.
+
+`segmentation` Set to True if you want to enable segmentation (re-defining spans). Applicable during both train and inference.
+
+`task1` and `task2` correspond to "relevanceClassification" and "hypothesisClassification". Applicable only during training. Since the two models can be trained separately, set one as True and the other as False if you only want to train one. Set both as True to train both models.
+
+`humanMode` and `try` For debugging
