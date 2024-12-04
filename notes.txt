@@ -11,23 +11,20 @@ Max Length:  405
 Mean Length:  59.200578592092576
 90th Percentile:  137
 
-$$$$$$$$$
+$$$$$$$$$$$$$$$$$
+With Segmentation:
 
-This is the initial stats I got:
-With segmentation, context size of input increases. Stats:
-Max Length: 3458
-Mean Length: 320.47396690635014
-90th Percentile: 618
+Relev Data:
+Max:  530
+Mean:  46.425640359236475
+90 percentile:  93
 
-Without segmenting (i.e. with original spans). Stats:
-Max Length: 1674
-Mean Length: 242.23076302257476
-90th Percentile: 442
-
-Bert has context of 512, so ig we have to not segment or use a diff model.
+HypoClassi:
+Max:  734
+Mean:  98.68756027000964
+90 percentile:  250
 
 
-but it looks wrong. The stats on top look more acceptable
 
 Observations:
 - Spans doesn't exactly correlate with new line. There are some spans which are abruptyly in the middle of a sentence.
