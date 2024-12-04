@@ -22,7 +22,7 @@ def segmentParas(embeddings, threshold = 0.6):
 
     for i in range(1, numSent):
         # Calculate the cosine similarity between the current sentence and the previous sentence
-        similarity = cosine_similarity([embeddings[i-1]], [embeddings[i]])[0][0]
+        similarity = cosine_similarity([embeddings[i-1].cpu().numpy()], [embeddings[i].cpu().numpy()])[0][0]
         if (similarity < threshold):
             segments.append(i)
         # print(similarity)

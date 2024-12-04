@@ -5,9 +5,14 @@ from transformers import Trainer, TrainingArguments
 from torch.utils.data import random_split
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from tqdm import tqdm
+import numpy as np
+from sklearn.metrics import precision_recall_curve, average_precision_score
 
 ##########
+# For non-Segmentation 75
 max_length = 75
+# For Segmentation 105
+# max_length = 105
 ##########
 
 
@@ -52,7 +57,7 @@ training_args = TrainingArguments(
     save_strategy="epoch",  # Save model at each epoch
     save_total_limit=1,  # Only keep one model checkpoint
     learning_rate=2e-5,
-    per_device_train_batch_size=16,
+    per_device_train_batch_size=50,
     num_train_epochs=10,  # Maximum number of epochs
     weight_decay=0.01,
     logging_dir="./relev_logs",
@@ -68,16 +73,36 @@ early_stopping_callback = EarlyStoppingCallback(
 
 def compute_metrics(pred):
     labels = pred.label_ids
+    predictions = pred.predictions
+    scores = predictions[:, 1]  # Probability of being relevant
     preds = pred.predictions.argmax(-1)  # Predicted labels
+
     acc = accuracy_score(labels, preds)
     precision, recall, f1, _ = precision_recall_fscore_support(labels, preds, average="binary")
-    results = {"accuracy": acc, "f1": f1, "precision": precision, "recall": recall}
+    
+    # mAP and P@R80 calculations
+    # For binary classification, treat the problem as "label 1 vs. label 0"
+    ap = average_precision_score(labels, scores)  # mAP
+    precision_vals, recall_vals, _ = precision_recall_curve(labels, scores)
+    
+    try:
+        idx = np.where(recall_vals >= 0.8)[0][0]  # Index of first recall >= 0.8
+        p_at_r80 = precision_vals[idx]
+    except IndexError:
+        p_at_r80 = 0.0  # If recall never reaches 0.8
 
-    # Save metrics to a text file
     with open("relevance_metrics.txt", "a") as f:
-        f.write(f"Accuracy: {acc}, Precision: {precision}, Recall: {recall}, F1: {f1}\n")
+        f.write(f"Accuracy: {acc}, Precision: {precision}, Recall: {recall}, F1: {f1}, mAP: {ap}, P@R80: {p_at_r80}\n")
 
-    return results
+    # Return results as a dictionary
+    return {
+        "accuracy": acc,
+        "f1": f1,
+        "precision": precision,
+        "recall": recall,
+        "mAP": ap,
+        "P@R80": p_at_r80
+    }
 
 def trainRelevance(trainInputs, trainLabels, devInputs, devLabels):
     trainRelDataset = RelevanceDataset(trainInputs, trainLabels, tokenizer, max_length=max_length)
@@ -101,7 +126,7 @@ def trainRelevance(trainInputs, trainLabels, devInputs, devLabels):
     trainer.save_model("./relevance_classifier")
 
 
-def getRelevanceLabels(testInputs, relClassiModelPath):
+def getRelevanceLabels(testInputs, relClassiModelPath, testLabels):
     """
     Predicts relevance labels (1 or 0) for a list of hypothesis + sentence pairs.
     This is for inference
@@ -116,6 +141,7 @@ def getRelevanceLabels(testInputs, relClassiModelPath):
     relevance_model.to(device)
 
     predictedLabels = []
+    scores = []
 
     batchSize = 100
 
@@ -138,8 +164,45 @@ def getRelevanceLabels(testInputs, relClassiModelPath):
         with torch.no_grad():
             outputs = relevance_model(input_ids=inputIds, attention_mask=attentionMask)
             logits = outputs.logits
+            probab = torch.nn.functional.softmax(logits, dim=-1)
 
         # Get predicted labels (1 = Relevant, 0 = Not Relevant)
         predictedLabels.extend(torch.argmax(logits, dim=-1).cpu().tolist())
+        scores.extend(probab[:, 1].cpu().tolist())
+    
+
+    # Calculate metrics
+    acc = accuracy_score(testLabels, predictedLabels)
+    precision, recall, f1, _ = precision_recall_fscore_support(testLabels, predictedLabels, average="binary")
+
+    # mAP calculation
+    ap = average_precision_score(testLabels, scores)  # mAP
+
+    # P@R80 calculation
+    precision_vals, recall_vals, _ = precision_recall_curve(testLabels, scores)
+    try:
+        idx = np.where(recall_vals >= 0.8)[0][0]  # Index of first recall >= 0.8
+        p_at_r80 = precision_vals[idx]
+    except IndexError:
+        p_at_r80 = 0.0  # If recall never reaches 0.8
+
+    # Print metrics
+    print("Relevance Classification Metrics:")
+    print(f"Accuracy: {acc:.4f}")
+    print(f"Precision: {precision:.4f}")
+    print(f"Recall: {recall:.4f}")
+    print(f"F1: {f1:.4f}")
+    print(f"mAP: {ap:.4f}")
+    print(f"P@R80: {p_at_r80:.4f}")
+
+    # Save metrics to a file
+    with open("test_relevance_metrics.txt", "w") as f:
+        f.write(f"Accuracy: {acc:.4f}\n")
+        f.write(f"Precision: {precision:.4f}\n")
+        f.write(f"Recall: {recall:.4f}\n")
+        f.write(f"F1: {f1:.4f}\n")
+        f.write(f"mAP: {ap:.4f}\n")
+        f.write(f"P@R80: {p_at_r80:.4f}\n")
+
 
     return predictedLabels

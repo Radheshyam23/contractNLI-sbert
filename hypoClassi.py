@@ -1,13 +1,15 @@
 from torch.utils.data import Dataset
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments, EarlyStoppingCallback
-from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support, f1_score, classification_report
 import json
 from tqdm import tqdm
 
 ##############
+# The hypo + relevant spans on an average have length of 60 and 90 percentile are at 137. (For non-Segmentation)
 max_length = 145
-# The hypo + relevant spans on an average have length of 60 and 90 percentile are at 137.
+# For Segmentation 260
+# max_length = 260
 ##############
 
 
@@ -144,7 +146,7 @@ def classify_hypothesis(input_text, tokenizer, model):
 
     return pred_label
 
-def testHypoClassification(testInp, modelPath):
+def testHypoClassification(testInp, modelPath, testTarget):
     """
     Classifies a list of hypothesis with relevant sentences into one of 3 classes.
     This is for inference
@@ -183,5 +185,17 @@ def testHypoClassification(testInp, modelPath):
 
         # Get predicted labels (0, 1, 2)
         predictedLabels.extend(torch.argmax(logits, dim=-1).cpu().tolist())
+
+    # Compute metrics
+    accuracy = accuracy_score(testTarget, predictedLabels)
+    f1_contradiction = f1_score(testTarget, predictedLabels, labels=[0], average="macro")  # F1 for contradiction
+    f1_entailment = f1_score(testTarget, predictedLabels, labels=[1], average="macro")  # F1 for entailment
+    macro_f1 = (f1_contradiction + f1_entailment) / 2  # Macro average F1 for contradiction and entailment
+
+    with open("test_hypo_metrics.txt", "w") as f:
+        f.write(f"Accuracy: {accuracy}\n")
+        f.write(f"F1 for Contradiction: {f1_contradiction}\n")
+        f.write(f"F1 for Entailment: {f1_entailment}\n")
+        f.write(f"Macro Average F1: {macro_f1}\n")
 
     return predictedLabels
